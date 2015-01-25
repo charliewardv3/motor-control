@@ -36,6 +36,3 @@ Testing:
 import serial
 ser = serial.Serial('/dev/tty.usbmodem14211', 115200)
 ser.write('8,1,1600,100\n')
-
-
-
