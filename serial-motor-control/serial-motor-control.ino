@@ -76,5 +76,14 @@ void move(int resolution, int motor_direction, int steps, int stepDelay){
     digitalWrite(STEP, LOW);
     delayMicroseconds(stepDelay);
   }
+  Serial.print("moved(");
+  Serial.print(char(resolution));
+  Serial.print(",");
+  Serial.print(char(motor_direction));
+  Serial.print(",");
+  Serial.print(char(steps));
+  Serial.print(",");
+  Serial.print(char(stepDelay));
+  Serial.println(")");
 }
 
