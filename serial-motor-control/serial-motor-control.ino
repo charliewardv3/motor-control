@@ -11,7 +11,7 @@
 
 instruction current;
 
-int minDelay = 800; //minimum delay for a full step
+unsigned long minDelay = 800; //minimum delay for a full step
 
 void setup() {             
   pinMode(MS1, OUTPUT);
@@ -33,7 +33,7 @@ void loop() {
     int res = Serial.parseInt();
     int dir = Serial.parseInt();
     int steps = Serial.parseInt();
-    int stepDelay = Serial.parseInt();
+    unsigned long stepDelay = Serial.parseFloat();
     int ref = Serial.parseInt();
     
     if(stepDelay < minDelay / res){
