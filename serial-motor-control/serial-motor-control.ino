@@ -1,3 +1,4 @@
+#include "structures.h"
 /* PIN CONSTANTS */
 #define MS1 8
 #define MS2 9
@@ -7,6 +8,8 @@
 /* DIRECTION CONSTANTS */
 #define CLOCKWISE 0
 #define COUNTER_CLOCKWISE 1
+
+instruction current;
 
 int minDelay = 800; //minimum delay for a full step
 
@@ -31,12 +34,26 @@ void loop() {
     int dir = Serial.parseInt();
     int steps = Serial.parseInt();
     int stepDelay = Serial.parseInt();
+    int ref = Serial.parseInt();
+    
+    if(stepDelay < minDelay / res){
+      stepDelay = minDelay / res;
+    }
     
     if(Serial.read() == '\n'){
-      move(res, dir, steps, stepDelay);
+      current.res = res;
+      current.dir = dir;
+      current.steps = steps;
+      current.stepDelay = stepDelay;
+      current.ref = ref;
+      current.inProgress = 0;
+      current.previousMicros = 0;
     }
   }
+  
+  run();
 }
+
 void setResolution(int resolution){
   switch(resolution){
     case 1:
@@ -62,28 +79,36 @@ void setDirection(int motor_direction){
   digitalWrite(DIR, (motor_direction) ? HIGH : LOW);
 }
 
-void move(int resolution, int motor_direction, int steps, int stepDelay){
-  setResolution(resolution);
-  setDirection(motor_direction);
-  
-  if(stepDelay < minDelay / resolution){
-    stepDelay = minDelay / resolution;
+void step(int resolution){
+  digitalWrite(STEP, HIGH);
+  delayMicroseconds(minDelay/resolution);
+  digitalWrite(STEP, LOW);
+};
+
+void run(){
+  if(current.steps > 0){
+    setResolution(current.res);
+    setDirection(current.dir);
+
+    unsigned long currentMicros = micros();
+    
+    if(current.inProgress == 0){
+      step(current.res);
+      current.inProgress = 1;
+      current.previousMicros = currentMicros;
+      current.steps--;
+    }
+    else if((unsigned long)(currentMicros - current.previousMicros) >= current.stepDelay){
+      step(current.res);
+      current.previousMicros = currentMicros;
+      current.steps--;
+    }
   }
-  
-  for(int i=0; i < steps; i++){
-    digitalWrite(STEP, HIGH);
-    delayMicroseconds(minDelay/resolution);
-    digitalWrite(STEP, LOW);
-    delayMicroseconds(stepDelay);
+  else if(current.steps <= 0 && current.inProgress == 1){
+    Serial.print(current.ref);
+    Serial.print(":");
+    Serial.println("1");
+    current.inProgress = 0;
   }
-  Serial.print("moved(");
-  Serial.print(resolution);
-  Serial.print(",");
-  Serial.print(motor_direction);
-  Serial.print(",");
-  Serial.print(steps);
-  Serial.print(",");
-  Serial.print(stepDelay);
-  Serial.println(")");
 }
 

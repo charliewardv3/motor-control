@@ -7,7 +7,7 @@ Allows you to send serial commands to an Arduino board to control a stepper moto
 Accepts a single command over serial connection specifying four parameters in the following string pattern:
 
 ```
-"[resolution],[direction],[steps],[step_delay]\n"
+"[resolution],[direction],[steps],[delay],[reference]\n"
 ```
 
 `resolution` is an integer value that specifys the size of the step
@@ -30,13 +30,14 @@ Accepts a single command over serial connection specifying four parameters in th
 
 `delay` is an integer value that specifies the delay between each step
 
+`reference` is an integer specified by the calling program that can be used later to reconcile responses
 
-The move command is a blocking operation.  Once the move command has completed, it will echo the following string back over the serial connection to signal completion:
+The move command is a non blocking operation.  Once the move command has completed, it will echo the following string back over the serial connection to signal completion:
 
 ```
-moved([resolution],[direction],[steps],[step_delay])\r\n
+[reference]:[message]\r\n
 ```
-
+When the move was successful, the returned message will be "success".
 
 ### Testing:  
 
@@ -53,24 +54,28 @@ moved([resolution],[direction],[steps],[step_delay])\r\n
 import serial
 import time
 
-ser = serial.Serial('/dev/cu.usbmodem1411', 115200)
+ser = serial.Serial('/dev/cu.usbmodem14211', 115200)
+
+reference = 0
 
 while True:
-	line = ser.readline()
+    line = ser.readline()
+    parsed = line.strip().split(":")
 
-	if line.strip() == "Ready":
-		# wait for the Ready message before starting.
-		ser.write('8,1,1600,100\n')
-	elif line.strip().startswith("moved"):
-		# move has completed...wait 1s and issue another move command.
-		print line.replace('\r\n', '')
-		time.sleep(1)
-		ser.write('8,1,1600,100\n')
-	else:
-		# unknown message
-		print '*' * 80
-		print line.replace('\r\n', '')
-		print '*' * 80
-
+    if line.strip() == "Ready":
+        # wait for the Ready message before starting.
+        ser.write('8,1,1600,100,' + str(reference) + '\n')
+        reference += 1
+    elif parsed[1] == 'success':
+        # move has completed...wait 1s and issue another move command.
+        print line.replace('\r\n', '')
+        time.sleep(1)
+        ser.write('8,1,1600,100,' + str(reference) + '\n')
+        reference += 1
+    else:
+        # unknown message
+        print '*' * 80
+        print line.replace('\r\n', '')
+        print '*' * 80
 
 ```
