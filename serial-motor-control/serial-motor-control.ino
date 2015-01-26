@@ -36,18 +36,19 @@ void loop() {
     unsigned long stepDelay = Serial.parseFloat();
     int ref = Serial.parseInt();
     
-    if(stepDelay < minDelay / res){
-      stepDelay = minDelay / res;
-    }
-    
     if(Serial.read() == '\n'){
       current.res = res;
       current.dir = dir;
-      current.steps = steps;
-      current.stepDelay = stepDelay;
+      current.steps = steps * 2;
+      current.stepDelay = stepDelay / 2;
       current.ref = ref;
       current.inProgress = 0;
       current.previousMicros = 0;
+      current.stepState = 0;
+      
+      if(current.stepDelay < minDelay / res){
+        current.stepDelay = minDelay / res;
+      }
     }
   }
   
@@ -79,10 +80,9 @@ void setDirection(int motor_direction){
   digitalWrite(DIR, (motor_direction) ? HIGH : LOW);
 }
 
-void step(int resolution){
-  digitalWrite(STEP, HIGH);
-  delayMicroseconds(minDelay/resolution);
-  digitalWrite(STEP, LOW);
+void halfStep(){
+  digitalWrite(STEP, (current.stepState) ? HIGH : LOW);
+  current.stepState = !current.stepState;
 };
 
 void run(){
@@ -93,18 +93,18 @@ void run(){
     unsigned long currentMicros = micros();
     
     if(current.inProgress == 0){
-      step(current.res);
+      halfStep();
       current.inProgress = 1;
       current.previousMicros = currentMicros;
       current.steps--;
     }
     else if((unsigned long)(currentMicros - current.previousMicros) >= current.stepDelay){
-      step(current.res);
+      halfStep();
       current.previousMicros = currentMicros;
       current.steps--;
     }
   }
-  else if(current.steps <= 0 && current.inProgress == 1){
+  else if(current.steps == 0 && current.inProgress == 1){
     Serial.print(current.ref);
     Serial.println(":success");
     current.inProgress = 0;

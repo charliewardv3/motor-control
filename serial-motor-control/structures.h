@@ -5,5 +5,6 @@ typedef struct {
   unsigned long stepDelay;
   int ref;
   int inProgress;
+  int stepState;
   unsigned long previousMicros;
 } instruction;
