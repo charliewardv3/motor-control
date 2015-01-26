@@ -8,7 +8,7 @@
 #define CLOCKWISE 0
 #define COUNTER_CLOCKWISE 1
 
-int minDelay = 800;
+int minDelay = 800; //minimum delay for a full step
 
 void setup() {             
   pinMode(MS1, OUTPUT);
@@ -83,7 +83,7 @@ void move(int resolution, int motor_direction, int steps, int stepDelay){
   Serial.print(",");
   Serial.print(steps);
   Serial.print(",");
-  Serial.print(stepDelay.);
+  Serial.print(stepDelay);
   Serial.println(")");
 }
 
