@@ -106,8 +106,7 @@ void run(){
   }
   else if(current.steps <= 0 && current.inProgress == 1){
     Serial.print(current.ref);
-    Serial.print(":");
-    Serial.println("1");
+    Serial.println(":success");
     current.inProgress = 0;
   }
 }
