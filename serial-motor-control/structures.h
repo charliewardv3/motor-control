@@ -4,7 +4,7 @@ typedef struct {
   int steps;
   unsigned long stepDelay;
   int ref;
-  int inProgress;
+  int state;
   int stepState;
   unsigned long previousMicros;
 } instruction;

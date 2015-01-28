@@ -1,3 +1,4 @@
+#include <QueueArray.h>
 #include "structures.h"
 /* PIN CONSTANTS */
 #define MS1 8
@@ -9,6 +10,12 @@
 #define CLOCKWISE 0
 #define COUNTER_CLOCKWISE 1
 
+/* Instruction States */
+#define NEW 0
+#define PROCESSING 1
+#define COMPLETE 2
+
+QueueArray <instruction> queue;
 instruction current;
 
 unsigned long minDelay = 800; //minimum delay for a full step
@@ -30,6 +37,7 @@ void setup() {
 
 void loop() {
   if(Serial.available() > 0){
+    
     int res = Serial.parseInt();
     int dir = Serial.parseInt();
     int steps = Serial.parseInt();
@@ -37,22 +45,34 @@ void loop() {
     int ref = Serial.parseInt();
     
     if(Serial.read() == '\n'){
-      current.res = res;
-      current.dir = dir;
-      current.steps = steps * 2;
-      current.stepDelay = stepDelay / 2;
-      current.ref = ref;
-      current.inProgress = 0;
-      current.previousMicros = 0;
-      current.stepState = 0;
-      
-      if(current.stepDelay < minDelay / res){
-        current.stepDelay = minDelay / res;
-      }
+      processIncoming(res, dir, steps, stepDelay, ref);
     }
   }
   
   run();
+}
+
+void processIncoming(int res, int dir, int steps, unsigned long int stepDelay, int ref){
+    if(stepDelay < minDelay / res){
+      Serial.print(ref);
+      Serial.println(":delay too short");
+    }
+    else if(queue.isFull()){
+      Serial.print(ref);
+      Serial.println(":queue full");
+    }
+    else {
+      instruction incoming;
+      incoming.res = res;
+      incoming.dir = dir;
+      incoming.steps = steps * 2; //account for half step behavior
+      incoming.stepDelay = stepDelay / 2; //Split delay between High and LOW half steps
+      incoming.ref = ref;
+      incoming.state = NEW;
+      incoming.previousMicros = 0;
+      incoming.stepState = 0;
+      queue.push(incoming);
+    }
 }
 
 void setResolution(int resolution){
@@ -76,8 +96,8 @@ void setResolution(int resolution){
   }
 }
 
-void setDirection(int motor_direction){
-  digitalWrite(DIR, (motor_direction) ? HIGH : LOW);
+void setDirection(int dir){
+  digitalWrite(DIR, (dir) ? HIGH : LOW);
 }
 
 void halfStep(){
@@ -86,15 +106,15 @@ void halfStep(){
 };
 
 void run(){
-  if(current.steps > 0){
+  if(current.steps > 0 && current.state != COMPLETE){
     setResolution(current.res);
     setDirection(current.dir);
 
     unsigned long currentMicros = micros();
     
-    if(current.inProgress == 0){
+    if(current.state == NEW){
       halfStep();
-      current.inProgress = 1;
+      current.state = PROCESSING;
       current.previousMicros = currentMicros;
       current.steps--;
     }
@@ -104,10 +124,13 @@ void run(){
       current.steps--;
     }
   }
-  else if(current.steps == 0 && current.inProgress == 1){
+  else if(current.steps == 0 && current.state == PROCESSING){
     Serial.print(current.ref);
     Serial.println(":success");
-    current.inProgress = 0;
+    current.state = COMPLETE;
+  }
+  else if(!queue.isEmpty()){
+    current = queue.pop();
   }
 }
 
