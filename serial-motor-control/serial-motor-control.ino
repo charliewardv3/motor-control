@@ -5,6 +5,7 @@
 #define MS2 9
 #define STEP 12
 #define DIR 13
+#define SLP 7
 
 /* DIRECTION CONSTANTS */
 #define CLOCKWISE 0
@@ -27,9 +28,11 @@ void setup() {
   pinMode(MS2, OUTPUT);
   pinMode(STEP, OUTPUT); 
   pinMode(DIR, OUTPUT);
+  pinMode(SLP, OUTPUT);
   
   digitalWrite(STEP, LOW);
-  
+  digitalWrite(SLP, LOW); //Initialize Sleeping
+
   setResolution(8);
   setDirection(CLOCKWISE);
   
@@ -44,6 +47,7 @@ void loop() {
 
 void checkSerial(){
   if(Serial.available() > 0){
+    wake(); //wake up and get ready
     
     int res = Serial.parseInt();
     int dir = Serial.parseInt();
@@ -54,10 +58,12 @@ void checkSerial(){
     int nonNumeric = Serial.read();
     
     if(nonNumeric == '\n'){
-      queueInstruction(res, dir, steps, stepDelay, ref);
-    }
-    else if(nonNumeric = 'X'){
-      stopMotor();
+      if(res == 0 && dir == 0 && steps == 0 && stepDelay == 0){
+        stopMotor();
+      }
+      else{
+        queueInstruction(res, dir, steps, stepDelay, ref);
+      }
     }
   }
 }
@@ -122,6 +128,15 @@ void setResolution(int resolution){
   }
 }
 
+
+void sleep(){
+  digitalWrite(SLP, LOW); //Sleep
+}
+
+void wake(){
+  digitalWrite(SLP, HIGH); //WakeUp!
+}
+
 void setDirection(int dir){
   digitalWrite(DIR, (dir) ? HIGH : LOW);
 }
@@ -161,6 +176,10 @@ void run(){
   
   else if(!queue.isEmpty()){
     current = queue.pop();
+  }
+  
+  else if(current.state == COMPLETE && queue.isEmpty()){
+    digitalWrite(SLP, LOW); //SLEEP
   }
 }
 
