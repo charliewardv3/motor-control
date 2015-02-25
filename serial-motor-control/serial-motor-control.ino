@@ -1,26 +1,38 @@
+#include <QueueList.h>
 #include "structures.h"
 /* PIN CONSTANTS */
 #define MS1 8
 #define MS2 9
 #define STEP 12
 #define DIR 13
+#define SLP 7
 
 /* DIRECTION CONSTANTS */
 #define CLOCKWISE 0
 #define COUNTER_CLOCKWISE 1
 
-instruction current;
+/* Instruction States */
+#define NEW 0
+#define PROCESSING 1
+#define COMPLETE 2
 
-unsigned long minDelay = 800; //minimum delay for a full step
+/* Define Safety Values */
+#define MINDELAY 800 //Minimum Delay for a full step
+#define MINRAM 500 //Minumum RAM threshold for adding a new instruction to the queue
+
+QueueList <instruction> queue;
+instruction current;
 
 void setup() {             
   pinMode(MS1, OUTPUT);
   pinMode(MS2, OUTPUT);
   pinMode(STEP, OUTPUT); 
   pinMode(DIR, OUTPUT);
+  pinMode(SLP, OUTPUT);
   
   digitalWrite(STEP, LOW);
-  
+  digitalWrite(SLP, LOW); //Initialize Sleeping
+
   setResolution(8);
   setDirection(CLOCKWISE);
   
@@ -29,30 +41,70 @@ void setup() {
 }
 
 void loop() {
+  checkSerial();
+  run();
+}
+
+void checkSerial(){
   if(Serial.available() > 0){
+    wake(); //wake up and get ready
+    
     int res = Serial.parseInt();
     int dir = Serial.parseInt();
     int steps = Serial.parseInt();
     unsigned long stepDelay = Serial.parseFloat();
     int ref = Serial.parseInt();
     
-    if(Serial.read() == '\n'){
-      current.res = res;
-      current.dir = dir;
-      current.steps = steps * 2;
-      current.stepDelay = stepDelay / 2;
-      current.ref = ref;
-      current.inProgress = 0;
-      current.previousMicros = 0;
-      current.stepState = 0;
-      
-      if(current.stepDelay < minDelay / res){
-        current.stepDelay = minDelay / res;
+    int nonNumeric = Serial.read();
+    
+    if(nonNumeric == '\n'){
+      if(res == 0 && dir == 0 && steps == 0 && stepDelay == 0){
+        stopMotor();
+      }
+      else{
+        queueInstruction(res, dir, steps, stepDelay, ref);
       }
     }
   }
+}
+
+void stopMotor(){
+  current.state = COMPLETE;
+  Serial.print(current.ref);
+  Serial.println(":canceled");
   
-  run();
+  while(!queue.isEmpty()){
+    instruction canceled = queue.pop();
+    Serial.print(canceled.ref);
+    Serial.println(":canceled");
+  }
+}
+
+void queueInstruction(int res, int dir, int steps, unsigned long int stepDelay, int ref){
+  if(stepDelay / 2 < MINDELAY / res){
+    Serial.print(ref);
+    Serial.println(":delay too short");
+  }
+  else if(freeRam() < MINRAM){
+    Serial.print(ref);
+    Serial.println(":queue full");
+  }
+  else {
+    instruction incoming;
+    incoming.res = res;
+    incoming.dir = dir;
+    incoming.steps = steps * 2; //account for half step behavior
+    incoming.stepDelay = stepDelay / 2; //Split delay between High and LOW half steps
+    incoming.ref = ref;
+    incoming.state = NEW;
+    incoming.previousMicros = 0;
+    incoming.stepState = 0;
+    queue.push(incoming);
+    Serial.print(ref);
+    Serial.println(":queued");
+    Serial.print("ram:");
+    Serial.println(freeRam());
+  }
 }
 
 void setResolution(int resolution){
@@ -76,38 +128,63 @@ void setResolution(int resolution){
   }
 }
 
-void setDirection(int motor_direction){
-  digitalWrite(DIR, (motor_direction) ? HIGH : LOW);
+
+void sleep(){
+  digitalWrite(SLP, LOW); //Sleep
+}
+
+void wake(){
+  digitalWrite(SLP, HIGH); //WakeUp!
+}
+
+void setDirection(int dir){
+  digitalWrite(DIR, (dir) ? HIGH : LOW);
 }
 
 void halfStep(){
   digitalWrite(STEP, (current.stepState) ? HIGH : LOW);
   current.stepState = !current.stepState;
-};
+}
 
 void run(){
-  if(current.steps > 0){
+  if(current.state == NEW && current.steps > 0){
     setResolution(current.res);
     setDirection(current.dir);
-
+    
+    halfStep();
+    
+    current.state = PROCESSING;
+    current.previousMicros = micros();
+    current.steps--;
+  } 
+  
+  else if(current.state == PROCESSING && current.steps > 0){
     unsigned long currentMicros = micros();
     
-    if(current.inProgress == 0){
-      halfStep();
-      current.inProgress = 1;
-      current.previousMicros = currentMicros;
-      current.steps--;
-    }
-    else if((unsigned long)(currentMicros - current.previousMicros) >= current.stepDelay){
+    if((unsigned long)(currentMicros - current.previousMicros) >= current.stepDelay){
       halfStep();
       current.previousMicros = currentMicros;
       current.steps--;
     }
   }
-  else if(current.steps == 0 && current.inProgress == 1){
+  
+  else if(current.state != COMPLETE && current.steps == 0){
     Serial.print(current.ref);
     Serial.println(":success");
-    current.inProgress = 0;
+    current.state = COMPLETE;
+  }
+  
+  else if(!queue.isEmpty()){
+    current = queue.pop();
+  }
+  
+  else if(current.state == COMPLETE && queue.isEmpty()){
+    digitalWrite(SLP, LOW); //SLEEP
   }
 }
 
+int freeRam () {
+  extern int __heap_start, *__brkval; 
+  int v; 
+  return (int) &v - (__brkval == 0 ? (int) &__heap_start : (int) __brkval); 
+}
